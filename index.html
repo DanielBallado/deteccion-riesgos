@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Detección - Aprendizaje Continuo</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            min-height: 100vh;
+            padding: 15px;
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 8px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .badge {
+            background: rgba(255,255,255,0.2);
+            padding: 6px 15px;
+            border-radius: 20px;
+            display: inline-block;
+            font-size: 0.85em;
+            margin: 5px;
+            backdrop-filter: blur(10px);
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .info-banner {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .info-banner h4 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+
+        .workflow-section {
+            background: #fff9e6;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .workflow-section h4 {
+            color: #f57c00;
+            margin-bottom: 10px;
+        }
+
+        .workflow-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .workflow-step {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 3px solid #ff9800;
+        }
+
+        .workflow-step .step-number {
+            background: #ff9800;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .model-config {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .model-config h3 {
+            color: #1565c0;
+            margin-bottom: 15px;
+        }
+
+        .model-input-group {
+            margin-bottom: 15px;
+        }
+
+        .model-input-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #1565c0;
+        }
+
+        .model-input-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #90caf9;
+            border-radius: 6px;
+            font-size: 0.95em;
+        }
+
+        .category-selector {
+            background: #f3e5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .category-selector h4 {
+            color: #7b1fa2;
+            margin-bottom: 10px;
+        }
+
+        .category-selector select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ba68c8;
+            border-radius: 6px;
+            font-size: 1em;
+        }
+
+        .alert-box {
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            border: 3px solid;
+        }
+
+        .alert-safe {
+            background: #d4edda;
+            color: #155724;
+            border-color: #28a745;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border-color: #ffc107;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        #video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #0f2027 0%, #2c5364 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(15, 32, 39, 0.6);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button.capture-btn {
+            background: linear-gradient(135deg, #4caf50 0%, #8bc34a 100%);
+        }
+
+        .status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: #333;
+            background: #f8f9fa;
+            text-align: center;
+        }
+
+        .status.loading { background: #fff3cd; color: #856404; }
+        .status.ready { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+
+        .detection-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .detection-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            color: #333;
+        }
+
+        .detection-card h3 {
+            margin-bottom: 15px;
+            color: #0f2027;
+        }
+
+        .detection-item {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .risk-critical {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+        }
+
+        .risk-high {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+
+        .risk-medium {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+        }
+
+        .risk-low {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+
+        .confidence-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+            transition: width 0.3s;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            color: #333;
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #0f2027;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .capture-log {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            border-radius: 8px;
+            color: #333;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .capture-log h4 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+
+        .log-entry {
+            padding: 8px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 { font-size: 1.5em; }
+            .detection-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .workflow-steps { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔄 Sistema de Aprendizaje Continuo</h1>
+        <div>
+            <span class="badge">🤖 IA Detección</span>
+            <span class="badge">📸 Captura Etiquetada</span>
+            <span class="badge">🔄 Re-entrenamiento</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Banner Informativo -->
+        <div class="info-banner">
+            <h4>✅ Sistema Simplificado - Sin Complicaciones</h4>
+            <p>
+                Este sistema guarda las evidencias <strong>localmente en tu dispositivo</strong> 
+                con nombres organizados por categoría. Luego tú decides cuándo subirlas a Drive, 
+                Dropbox, o cualquier almacenamiento que uses.
+            </p>
+        </div>
+
+        <!-- Flujo de Trabajo -->
+        <div class="workflow-section">
+            <h4>🔄 Flujo de Aprendizaje Continuo</h4>
+            <div class="workflow-steps">
+                <div class="workflow-step">
+                    <div class="step-number">1</div>
+                    <strong>Capturar</strong>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Toma evidencias durante el trabajo seleccionando la categoría correcta
+                    </p>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">2</div>
+                    <strong>Organizar</strong>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Las fotos se guardan con nombres como: persona_sin_casco_001.png
+                    </p>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">3</div>
+                    <strong>Subir a Drive</strong>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Sube manualmente a Drive organizando por carpetas
+                    </p>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">4</div>
+                    <strong>Re-entrenar</strong>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Cada semana/mes: descarga de Drive y re-entrena en Teachable Machine
+                    </p>
+                </div>
+                <div class="workflow-step">
+                    <div class="step-number">5</div>
+                    <strong>Actualizar Modelo</strong>
+                    <p style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                        Pega la nueva URL del modelo mejorado abajo
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Selector de Categoría -->
+        <div class="category-selector">
+            <h4>🏷️ Etiqueta para Próximas Capturas</h4>
+            <select id="categorySelect">
+                <option value="persona_con_casco">✅ Persona CON Casco</option>
+                <option value="persona_sin_casco">❌ Persona SIN Casco</option>
+                <option value="persona_con_lentes">✅ Persona CON Lentes</option>
+                <option value="persona_sin_lentes">❌ Persona SIN Lentes</option>
+                <option value="persona_epp_completo">✅ EPP Completo (Casco + Lentes)</option>
+                <option value="persona_sin_epp">❌ SIN EPP</option>
+                <option value="vehiculo_movimiento">🚛 Vehículo en Movimiento</option>
+                <option value="herramienta_peligrosa">🔪 Herramienta Peligrosa</option>
+                <option value="recipiente_quimico">🧪 Recipiente Químico</option>
+                <option value="zona_segura">🟢 Zona Segura</option>
+            </select>
+            <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                💡 Las fotos se guardarán como: <strong id="filenamePreview">persona_con_casco_001.png</strong>
+            </p>
+        </div>
+
+        <!-- Configuración del Modelo -->
+        <div class="model-config">
+            <h3>⚙️ Modelo Personalizado</h3>
+            <div class="model-input-group">
+                <label for="modelURL">URL del Modelo de Teachable Machine:</label>
+                <input 
+                    type="text" 
+                    id="modelURL" 
+                    placeholder="https://teachablemachine.withgoogle.com/models/ABC123XYZ/"
+                    value="">
+                <small style="display: block; color: #666; margin-top: 5px;">
+                    💡 Deja vacío si aún no tienes modelo entrenado. El sistema funcionará solo con detección general.
+                </small>
+            </div>
+            <div class="btn-group">
+                <button id="loadModelBtn">Cargar Modelo</button>
+                <button id="removeModelBtn" disabled>Quitar Modelo</button>
+            </div>
+        </div>
+
+        <!-- Alertas del Sistema -->
+        <div class="alert-box alert-safe" id="systemAlert">
+            ✓ SISTEMA LISTO
+        </div>
+
+        <div id="status" class="status loading">Cargando sistema de IA...</div>
+
+        <!-- Cámara -->
+        <div class="camera-container">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <!-- Controles -->
+        <div class="btn-group">
+            <button id="startBtn" disabled>🎥 Iniciar Cámara</button>
+            <button id="stopBtn" disabled>⏹️ Detener</button>
+            <button id="captureBtn" class="capture-btn" disabled>📸 Capturar y Etiquetar</button>
+        </div>
+
+        <!-- Estadísticas -->
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-number" id="totalDetections">0</div>
+                <div class="stat-label">Detecciones Activas</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="captureCount">0</div>
+                <div class="stat-label">Fotos Capturadas Hoy</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="criticalRisks">0</div>
+                <div class="stat-label">Riesgos Críticos</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="lastCapture">--</div>
+                <div class="stat-label">Última Captura</div>
+            </div>
+        </div>
+
+        <!-- Detecciones -->
+        <div class="detection-grid">
+            <div class="detection-card">
+                <h3>🤖 Detecciones Generales</h3>
+                <div id="generalList">
+                    <p style="text-align: center; color: #6c757d; padding: 20px;">
+                        Esperando activación de cámara...
+                    </p>
+                </div>
+            </div>
+
+            <div class="detection-card">
+                <h3>🎯 Modelo Personalizado</h3>
+                <div id="customList">
+                    <p style="text-align: center; color: #6c757d; padding: 20px;">
+                        Sin modelo cargado
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Registro de Capturas -->
+        <div class="capture-log">
+            <h4>📸 Registro de Capturas (Últimas 20)</h4>
+            <div id="captureLog">
+                <p style="text-align: center; color: #666;">No hay capturas registradas</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let cocoModel, customModel;
+        let video, canvas, ctx;
+        let stream, animationId;
+        let isCustomModelLoaded = false;
+        let captureCount = 0;
+        let captureLog = [];
+
+        const translations = {
+            'person': 'Persona',
+            'knife': 'Cuchillo',
+            'scissors': 'Tijeras',
+            'bottle': 'Botella',
+            'cup': 'Recipiente',
+            'bowl': 'Tazón',
+            'car': 'Automóvil',
+            'truck': 'Camión'
+        };
+
+        const generalRisks = {
+            'person': { level: 'medium', icon: '👷' },
+            'knife': { level: 'high', icon: '🔪' },
+            'scissors': { level: 'medium', icon: '✂️' },
+            'car': { level: 'high', icon: '🚗' },
+            'truck': { level: 'high', icon: '🚛' }
+        };
+
+        // Actualizar preview de nombre de archivo
+        document.getElementById('categorySelect').addEventListener('change', (e) => {
+            const category = e.target.value;
+            const count = String(captureCount + 1).padStart(3, '0');
+            document.getElementById('filenamePreview').textContent = `${category}_${count}.png`;
+        });
+
+        // Cargar modelo COCO
+        async function loadCocoModel() {
+            try {
+                document.getElementById('status').textContent = 'Cargando modelo de IA general...';
+                cocoModel = await cocoSsd.load();
+                document.getElementById('status').textContent = '✓ Sistema listo para usar';
+                document.getElementById('status').className = 'status ready';
+                document.getElementById('startBtn').disabled = false;
+            } catch (error) {
+                document.getElementById('status').textContent = '✗ Error al cargar el sistema';
+                document.getElementById('status').className = 'status error';
+                console.error('Error:', error);
+            }
+        }
+
+        // Cargar modelo personalizado
+        document.getElementById('loadModelBtn').addEventListener('click', async () => {
+            const modelURL = document.getElementById('modelURL').value.trim();
+            
+            if (!modelURL) {
+                alert('⚠️ Ingresa la URL de tu modelo de Teachable Machine');
+                return;
+            }
+
+            try {
+                document.getElementById('status').textContent = 'Cargando modelo personalizado...';
+                document.getElementById('status').className = 'status loading';
+                document.getElementById('loadModelBtn').disabled = true;
+                
+                const modelPath = modelURL.endsWith('/') ? modelURL : modelURL + '/';
+                customModel = await tmImage.load(modelPath + 'model.json', modelPath + 'metadata.json');
+                
+                isCustomModelLoaded = true;
+                document.getElementById('status').textContent = '✓ ¡Modelo personalizado cargado!';
+                document.getElementById('status').className = 'status ready';
+                document.getElementById('systemAlert').textContent = '✓ SISTEMA COMPLETO: Detección general + modelo personalizado';
+                document.getElementById('removeModelBtn').disabled = false;
+                document.getElementById('customList').innerHTML = '<p style="text-align: center; color: #28a745; padding: 20px; font-weight: bold;">✓ Modelo activo. Detectando...</p>';
+                
+                alert('✅ Modelo personalizado cargado exitosamente');
+            } catch (error) {
+                document.getElementById('status').textContent = '✗ Error al cargar modelo';
+                document.getElementById('status').className = 'status error';
+                document.getElementById('loadModelBtn').disabled = false;
+                alert('❌ Error al cargar el modelo.\n\nVerifica que:\n1. La URL sea correcta\n2. Termine con /\n3. Tengas conexión a internet');
+                console.error('Error:', error);
+            }
+        });
+
+        // Remover modelo
+        document.getElementById('removeModelBtn').addEventListener('click', () => {
+            customModel = null;
+            isCustomModelLoaded = false;
+            document.getElementById('systemAlert').textContent = '✓ SISTEMA LISTO (solo detección general)';
+            document.getElementById('removeModelBtn').disabled = true;
+            document.getElementById('loadModelBtn').disabled = false;
+            document.getElementById('modelURL').value = '';
+            document.getElementById('customList').innerHTML = '<p style="text-align: center; color: #6c757d; padding: 20px;">Sin modelo cargado</p>';
+        });
+
+        // Iniciar cámara
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                
+                video.srcObject = stream;
+                
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                    document.getElementById('captureBtn').disabled = false;
+                    document.getElementById('status').textContent = '🔍 Detectando en tiempo real...';
+                    detectObjects();
+                };
+            } catch (error) {
+                document.getElementById('status').textContent = '✗ Error al acceder a la cámara';
+                document.getElementById('status').className = 'status error';
+                console.error('Error:', error);
+            }
+        }
+
+        // Detener cámara
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('captureBtn').disabled = true;
+            document.getElementById('status').textContent = '✓ Sistema listo';
+            resetStats();
+        }
+
+        // Capturar y etiquetar
+        document.getElementById('captureBtn').addEventListener('click', () => {
+            const evidenceCanvas = document.createElement('canvas');
+            evidenceCanvas.width = video.videoWidth;
+            evidenceCanvas.height = video.videoHeight;
+            const evidenceCtx = evidenceCanvas.getContext('2d');
+            
+            evidenceCtx.drawImage(video, 0, 0);
+            evidenceCtx.drawImage(canvas, 0, 0);
+            
+            const category = document.getElementById('categorySelect').value;
+            const timestamp = new Date().toLocaleString('es-MX');
+            
+            // Añadir marca de agua
+            evidenceCtx.font = 'bold 24px Arial';
+            evidenceCtx.fillStyle = 'yellow';
+            evidenceCtx.strokeStyle = 'black';
+            evidenceCtx.lineWidth = 3;
+            evidenceCtx.strokeText(`${timestamp} | ${category}`, 20, 50);
+            evidenceCtx.fillText(`${timestamp} | ${category}`, 20, 50);
+            
+            captureCount++;
+            const count = String(captureCount).padStart(3, '0');
+            const filename = `${category}_${count}.png`;
+            
+            evidenceCanvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                
+                // Registrar captura
+                logCapture(filename, category);
+                
+                // Actualizar stats
+                document.getElementById('captureCount').textContent = captureCount;
+                document.getElementById('lastCapture').textContent = new Date().toLocaleTimeString('es-MX');
+                
+                // Actualizar preview
+                const nextCount = String(captureCount + 1).padStart(3, '0');
+                document.getElementById('filenamePreview').textContent = `${category}_${nextCount}.png`;
+            });
+        });
+
+        function logCapture(filename, category) {
+            const timestamp = new Date().toLocaleTimeString('es-MX');
+            captureLog.unshift({
+                time: timestamp,
+                filename: filename,
+                category: category
+            });
+            
+            if (captureLog.length > 20) captureLog.pop();
+            updateCaptureLog();
+        }
+
+        function updateCaptureLog() {
+            const logDiv = document.getElementById('captureLog');
+            if (captureLog.length === 0) {
+                logDiv.innerHTML = '<p style="text-align: center; color: #666;">No hay capturas registradas</p>';
+                return;
+            }
+            
+            logDiv.innerHTML = captureLog.map(log => `
+                <div class="log-entry">
+                    <div>
+                        <strong>${log.time}</strong> - ${log.filename}
+                    </div>
+                    <span style="padding: 4px 10px; background: #4caf50; color: white; border-radius: 12px; font-size: 0.85em;">
+                        ${log.category}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        // Detectar objetos
+        async function detectObjects() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const generalPredictions = await cocoModel.detect(video);
+            
+            let customPredictions = [];
+            if (isCustomModelLoaded && customModel) {
+                try {
+                    customPredictions = await customModel.predict(video);
+                } catch (error) {
+                    console.error('Error en modelo personalizado:', error);
+                }
+            }
+            
+            // Dibujar detecciones
+            generalPredictions.forEach(pred => {
+                const [x, y, w, h] = pred.bbox;
+                const risk = generalRisks[pred.class];
+                
+                let color = '#00ff00';
+                if (risk) {
+                    color = risk.level === 'high' ? '#ff0000' : risk.level === 'medium' ? '#ffa500' : '#00bfff';
+                }
+                
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, w, h);
+                
+                const label = `${translations[pred.class] || pred.class} ${Math.round(pred.score * 100)}%`;
+                ctx.font = 'bold 16px Arial';
+                const textWidth = ctx.measureText(label).width;
+                
+                ctx.fillStyle = color;
+                ctx.fillRect(x, y - 25, textWidth + 10, 25);
+                ctx.fillStyle = '#000';
+                ctx.fillText(label, x + 5, y - 7);
+            });
+            
+            updateUI(generalPredictions, customPredictions);
+            
+            animationId = requestAnimationFrame(detectObjects);
+        }
+
+        // Actualizar interfaz
+        function updateUI(general, custom) {
+            const customFiltered = custom.filter(c => c.probability > 0.5);
+            document.getElementById('totalDetections').textContent = general.length + customFiltered.length;
+            
+            const criticalCount = general.filter(g => generalRisks[g.class]?.level === 'high').length +
+                                 custom.filter(c => c.probability > 0.9 && c.className.toLowerCase().includes('sin_')).length;
+            document.getElementById('criticalRisks').textContent = criticalCount;
+            
+            // Lista general
+            const generalList = document.getElementById('generalList');
+            if (general.length > 0) {
+                generalList.innerHTML = general.map(g => {
+                    const risk = generalRisks[g.class];
+                    const riskClass = risk ? `risk-${risk.level}` : 'risk-low';
+                    return `
+                        <div class="detection-item ${riskClass}">
+                            <div style="flex: 1;">
+                                <strong>${risk?.icon || '📦'} ${translations[g.class] || g.class}</strong>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" style="width: ${g.score * 100}%"></div>
+                                </div>
+                            </div>
+                            <span style="font-weight: bold;">${Math.round(g.score * 100)}%</span>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                generalList.innerHTML = '<p style="text-align: center; color: #6c757d; padding: 20px;">Sin detecciones</p>';
+            }
+            
+            // Lista personalizada
+            const customList = document.getElementById('customList');
+            if (isCustomModelLoaded && customFiltered.length > 0) {
+                customList.innerHTML = customFiltered
+                    .sort((a, b) => b.probability - a.probability)
+                    .map(c => {
+                        let riskClass = 'risk-low';
+                        let icon = '🟢';
+                        
+                        if (c.probability > 0.9 && (c.className.toLowerCase().includes('sin_') || 
+                            c.className.toLowerCase().includes('peligro'))) {
+                            riskClass = 'risk-critical';
+                            icon = '🔴';
+                        } else if (c.probability > 0.8) {
+                            riskClass = 'risk-high';
+                            icon = '🟡';
+                        } else if (c.probability > 0.6) {
+                            riskClass = 'risk-medium';
+                            icon = '🔵';
+                        }
+                        
+                        return `
+                            <div class="detection-item ${riskClass}">
+                                <div style="flex: 1;">
+                                    <strong>${icon} ${c.className}</strong>
+                                    <div class="confidence-bar">
+                                        <div class="confidence-fill" style="width: ${c.probability * 100}%"></div>
+                                    </div>
+                                </div>
+                                <span style="font-weight: bold;">${Math.round(c.probability * 100)}%</span>
+                            </div>
+                        `;
+                    }).join('');
+            } else if (isCustomModelLoaded) {
+                customList.innerHTML = '<p style="text-align: center; color: #6c757d; padding: 20px;">Confianza baja en detecciones</p>';
+            } else {
+                customList.innerHTML = '<p style="text-align: center; color: #ff9800; padding: 20px;">Sin modelo cargado</p>';
+            }
+        }
+
+        function resetStats() {
+            document.getElementById('totalDetections').textContent = '0';
+            document.getElementById('criticalRisks').textContent = '0';
+            document.getElementById('generalList').innerHTML = '<p style="text-align: center; color: #6c757d; padding: 20px;">Esperando activación...</p>';
+            if (!isCustomModelLoaded) {
+                document.getElementById('customList').innerHTML = '<p style="text-align: center; color: #6c757d; padding: 20px;">Sin modelo cargado</p>';
+            }
+        }
+
+        // Event listeners
+        document.getElementById('startBtn').addEventListener('click', startCamera);
+        document.getElementById('stopBtn').addEventListener('click', stopCamera);
+
+        // Inicialización
+        window.onload = () => {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            loadCocoModel();
+            
+            // Actualizar preview inicial
+            const category = document.getElementById('categorySelect').value;
+            document.getElementById('filenamePreview').textContent = `${category}_001.png`;
+            
+            console.log('✅ Sistema cargado correctamente');
+        };
+    </script>
+</body>
+</html>
